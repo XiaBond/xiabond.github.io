@@ -1,0 +1,64 @@
+name: Deploy Next.js to GitHub Pages
+# 触发条件：推送代码到 main 分支时自动执行部署
+on:
+  push:
+    branches: [ main ]
+
+# 权限配置，必须开启pages写入权限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 并发控制：多次推送时取消上一次部署，避免冲突
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  # 任务1：打包项目
+  build:
+    runs-on: ubuntu-latest # 运行环境：Ubuntu云服务器
+    steps:
+      # 步骤1：拉取仓库全部代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 步骤2：配置Node.js环境
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm' # 缓存pnpm依赖，加速构建
+
+      # 步骤3：安装pnpm包管理器
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      # 步骤4：安装项目所有依赖
+      - name: Install dependencies
+        run: pnpm install
+
+      # 步骤5：Next静态打包，生成out文件夹
+      - name: Build static export
+        run: pnpm build
+
+      # 步骤6：上传打包产物out文件夹，供部署任务使用
+      - name: Upload build artifacts
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./out
+
+  # 任务2：部署到GitHub Pages（依赖打包任务完成后执行）
+  deploy:
+    needs: build # 必须等build打包完成才执行部署
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: https://xiabond.github.io # 你的主页地址
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
